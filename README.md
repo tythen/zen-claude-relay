@@ -28,7 +28,7 @@ OpenCode ──POST/SSE──► 本代理 (127.0.0.1:8788) ──► opencode.a
 | --- | --- |
 | **Node.js 18+** | <https://nodejs.org> —— 用到了内置的 `fetch` |
 | **OpenCode** | <https://opencode.ai> —— 桌面端或 CLI 都行 |
-| **OpenCode Zen API key** | <https://opencode.ai/auth> 登录后复制，形如 `oc_sk_...` |
+| **OpenCode Zen API key** | <https://opencode.ai/auth> 登录后复制，形如 `oc_sk_...`。**每人一个，不要共用** |
 | `exo-free` 可用 | 免费期内有效，随时可能下线 |
 
 > ⚠️ 免费层要求「必须在 OpenCode 内使用」，所以**必须搭配真实的 OpenCode** 用，
@@ -149,7 +149,17 @@ node doctor.mjs
 
 ### 关于 `auth.override`
 
-大部分情况下**留空就行**，代理会用 OpenCode 自己的凭据。
+**先说结论：凭据是必需的，跑不掉。** 实测（用一个凭据表完全空白的 OpenCode 实例验证）：
+没有凭据时 OpenCode 会直接报 `Model unavailable`，**请求根本发不出去**，
+而不是发出去被 Zen 拒绝。这是客户端层面的限制。
+
+有意思的是，Zen **服务端**其实并不强制要求凭据 —— 匿名的、请求头形状正确的请求
+也能拿到 `200`。卡住你的是 OpenCode 自己，不是 Zen。
+
+那 `auth.override` 有什么用？两种填法二选一：
+
+- **填 key（推荐）** —— 代理用它，与 OpenCode 的登录状态解耦（比如你登录过 Console 导致凭据被抢占时）
+- **留空** —— 沿用 OpenCode 自己的凭据，前提是你已经 `opencode auth login` 配好了 Zen
 
 什么时候需要填？如果你的 OpenCode 里同时登录过 **OpenCode Console** 账号，
 那条 OAuth 凭据会抢占 `opencode` 提供方的凭据位，而它的 token 对 Zen 的 API 无效，

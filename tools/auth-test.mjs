@@ -9,6 +9,7 @@
 import https from 'node:https';
 
 const creds = [
+  ['（完全不发凭据）', ''],
   ['oc_sk_ 格式的 key', process.env.CRED_KEYSK],
   ['st_ Console 令牌（桌面端登录存的）', process.env.CRED_ST],
 ];
@@ -23,7 +24,7 @@ function probe(auth) {
         path: '/zen/v1/chat/completions',
         method: 'POST',
         headers: {
-          authorization: `Bearer ${auth}`,
+          ...(auth ? { authorization: `Bearer ${auth}` } : {}),
           'content-type': 'application/json',
           'content-length': Buffer.byteLength(body),
           'user-agent': 'opencode/latest/2.0.24/cli',
@@ -46,7 +47,7 @@ function probe(auth) {
 }
 
 for (const [label, auth] of creds) {
-  if (!auth) { console.log(`\n${label}\n  (未提供，跳过)`); continue; }
+  if (auth === undefined) { console.log(`\n${label}\n  (未提供，跳过)`); continue; }
   const r = await probe(auth);
   let verdict;
   if (r.status === 401) verdict = '\x1b[31m✗ 凭据无效（Zen 拒绝了这个 token）\x1b[0m';

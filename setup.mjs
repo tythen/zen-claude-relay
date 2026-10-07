@@ -136,20 +136,25 @@ if (!opencodeFound) {
 // ───────────────────────────────────────────── 3. API key
 
 step(3, 'OpenCode Zen 的 API key');
-say(C.d('  免费模型（含 exo-free）需要一个 OpenCode Zen 的 API key。'));
-say(C.d('  获取方式：打开 https://opencode.ai/auth 登录并复制你的 key（形如 oc_sk_...）'));
-say(C.d('  可以留空跳过 —— 那样代理会沿用 OpenCode 自己的凭据。'));
+say(C.d('  这一步不能真正省掉。OpenCode 在没有凭据时，根本不会把 exo-free 列为可选模型'));
+say(C.d('  （直接报 "Model unavailable"，请求发都发不出去）。'));
+say('');
+say(C.d('  两种填法，二选一：'));
+say(C.d('    A. 现在就粘贴你的 key —— 代理会用它，与 OpenCode 的登录状态无关（推荐）'));
+say(C.d('    B. 留空 —— 前提是你已经用 auth login 配好了 Zen 凭据'));
+say('');
+say(C.d('  每个人都要用自己的 key，不要共用。获取：https://opencode.ai/auth'));
 say('');
 
 let key = KEY_ARG ?? '';
-if (!key && rl) key = await ask('  粘贴你的 key（直接回车跳过）');
+if (!key && rl) key = await ask('  粘贴你的 key（或直接回车留空）');
 key = key.trim();
 
 if (key && !key.startsWith('oc_sk_')) {
   say(C.y(`  ! 这个 key 不像 Zen 的格式（一般以 oc_sk_ 开头），继续但可能会失败`));
 }
 if (key) say(`  ${C.g('✓')} 已记录（${key.slice(0, 12)}…${key.slice(-4)}）`);
-else say(`  ${C.d('· 跳过，将沿用 OpenCode 自己的凭据')}`);
+else say(`  ${C.d('· 留空：将沿用 OpenCode 自己的凭据（请确认已用 auth login 配好）')}`);
 
 // ───────────────────────────────────────────── 4. 写 config.json
 

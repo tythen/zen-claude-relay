@@ -22,7 +22,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { pipeline } from 'node:stream';
@@ -299,7 +299,13 @@ function probeOnce({ headers, body, affinity, auth }) {
   return new Promise((resolve) => {
     const h = { ...headers, 'content-length': String(body.length), 'accept-encoding': 'identity' };
     delete h.host;
-    if (auth) h.authorization = auth.startsWith('Bearer ') ? auth : `Bearer ${auth}`;
+    if (auth === null) {
+      delete h.authorization; // 明确要求：一个凭据都不发
+    } else if (auth) {
+      h.authorization = auth.startsWith('Bearer ') ? auth : `Bearer ${auth}`;
+    } else if (AUTH_OVERRIDE) {
+      h.authorization = `Bearer ${AUTH_OVERRIDE.key}`;
+    }
     if (affinity) {
       h['x-session-affinity'] = affinity;
       h['x-opencode-session'] = affinity;
@@ -346,6 +352,29 @@ function probeOnce({ headers, body, affinity, auth }) {
     req.write(body);
     req.end();
   });
+}
+
+const TEMPLATE_FILE = path.join(__dirname, 'probe-template.json');
+
+/** 把模板落盘，让探测能力能跨代理重启保留。注意：落盘时剥掉 authorization。 */
+function saveTemplate() {
+  if (!lastIntercept) return;
+  try {
+    const { authorization, ...safe } = lastIntercept.headers;
+    writeFileSync(TEMPLATE_FILE, JSON.stringify({ savedAt: new Date().toISOString(), headers: safe, body: lastIntercept.body.toString('base64') }, null, 2));
+  } catch {
+    /* 落盘失败无所谓 */
+  }
+}
+
+function loadTemplate() {
+  try {
+    const t = JSON.parse(readFileSync(TEMPLATE_FILE, 'utf8'));
+    lastIntercept = { headers: t.headers, body: Buffer.from(t.body, 'base64') };
+    return t.savedAt;
+  } catch {
+    return null;
+  }
 }
 
 /** 按模式重复探测 n 次，统计落在 Claude / GPT 的分布 */
@@ -418,6 +447,7 @@ function isIntercepted(req, bodyBuf) {
 async function handleIntercepted(req, res, bodyBuf, t0) {
   stats.intercepted++;
   lastIntercept = { headers: { ...req.headers }, body: Buffer.from(bodyBuf) };
+  saveTemplate();
   const reqPath = req.url;
   const max = CFG.retry.maxAttempts;
   const original = { ...req.headers };
@@ -639,7 +669,8 @@ const server = http.createServer(async (req, res) => {
     } else if (u.pathname === '/__relay/probe') {
       const n = Math.min(Number(u.searchParams.get('n')) || 8, 30);
       const mode = u.searchParams.get('mode') || 'fresh';
-      const auth = u.searchParams.get('auth') || undefined;
+      const authRaw = u.searchParams.get('auth');
+      const auth = authRaw === null ? undefined : authRaw === 'none' ? null : authRaw;
       try {
         sendJsonError(res, 200, await runProbe(n, mode, auth));
       } catch (e) {
@@ -696,6 +727,9 @@ server.on('error', (e) => {
   }
   throw e;
 });
+
+const restoredAt = loadTemplate();
+if (restoredAt) log(`[relay] 已恢复上次的探测模板（保存于 ${restoredAt}）`);
 
 server.listen(CFG.listen.port, CFG.listen.host, () => {
   say('');
