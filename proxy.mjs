@@ -295,10 +295,22 @@ let lastIntercept = null;
  * 一次性探测：只读到第一帧带 id 的 SSE 就断开，用来快速摸清路由。
  * 复用真实 OpenCode 的请求模板（头 + body），因为裸请求会被免费层门禁挡住。
  */
-function probeOnce({ headers, body, affinity, auth }) {
+function probeOnce({ headers, body, affinity, auth, model }) {
   return new Promise((resolve) => {
     const h = { ...headers, 'content-length': String(body.length), 'accept-encoding': 'identity' };
     delete h.host;
+    let sendBody = body;
+    if (model) {
+      try {
+        const b = JSON.parse(body.toString('utf8'));
+        b.model = model;
+        sendBody = Buffer.from(JSON.stringify(b));
+      } catch {
+        /* 解析不了就原样发 */
+      }
+    }
+    h['content-length'] = String(sendBody.length);
+
     if (auth === null) {
       delete h.authorization; // 明确要求：一个凭据都不发
     } else if (auth) {
@@ -349,7 +361,7 @@ function probeOnce({ headers, body, affinity, auth }) {
       req.destroy();
       done({ status: 0, id: null, kind: 'timeout' });
     });
-    req.write(body);
+    req.write(sendBody);
     req.end();
   });
 }
@@ -388,7 +400,7 @@ function loadTemplate() {
 }
 
 /** 按模式重复探测 n 次，统计落在 Claude / GPT 的分布 */
-async function runProbe(n, mode, auth) {
+async function runProbe(n, mode, auth, model) {
   if (!lastIntercept) {
     return { error: '还没有捕获到 exo-free 请求模板。请先用 OpenCode 发一次消息，让代理看到真实请求。' };
   }
@@ -396,7 +408,7 @@ async function runProbe(n, mode, auth) {
   const results = [];
   for (let i = 0; i < n; i++) {
     const affinity = mode === 'same' ? undefined : mode === 'none' ? null : mode === 'fixed' ? fixed : freshSessionId();
-    const r = await probeOnce({ headers: lastIntercept.headers, body: lastIntercept.body, affinity, auth });
+    const r = await probeOnce({ headers: lastIntercept.headers, body: lastIntercept.body, affinity, auth, model });
     results.push({ i: i + 1, affinity: affinity ? affinity.slice(0, 18) : null, ...r });
     log(`[probe] ${i + 1}/${n} mode=${mode} -> ${r.kind} ${r.id ?? ''}`);
     await new Promise((res) => setTimeout(res, 700));
@@ -681,8 +693,9 @@ const server = http.createServer(async (req, res) => {
       const mode = u.searchParams.get('mode') || 'fresh';
       const authRaw = u.searchParams.get('auth');
       const auth = authRaw === null ? undefined : authRaw === 'none' ? null : authRaw;
+      const model = u.searchParams.get('model') || undefined;
       try {
-        sendJsonError(res, 200, await runProbe(n, mode, auth));
+        sendJsonError(res, 200, await runProbe(n, mode, auth, model));
       } catch (e) {
         sendJsonError(res, 500, { error: String(e.message) });
       }

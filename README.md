@@ -229,6 +229,23 @@ curl http://127.0.0.1:8788/__relay/health
 curl "http://127.0.0.1:8788/__relay/probe?n=4&mode=fresh"
 ```
 
+### 模型体检
+
+某个模型报错时，用它一眼看出是「账号出问题」还是「只有那个模型挂了」：
+
+```bash
+node tools/check-models.mjs          # 测所有 *-free 模型
+node tools/check-models.mjs --all    # 连付费模型一起测
+```
+
+```
+✗ 402 后端故障   exo-free          Upstream request failed: Endpoint is unavailable.
+✓ 可用           space-bunny-free  07153a031a9d953fa1b201adf0b61cfe
+✓ 可用           fledge-alpha-free e0485a36456e488098a02f764306ab73
+
+6 个可用   1 个后端故障
+```
+
 `probe` 的 `mode`：
 
 | 值 | 含义 |
@@ -269,6 +286,7 @@ node test-relay.mjs
 
 | 现象 | 原因 | 怎么办 |
 | --- | --- | --- |
+| `Upstream request failed: Endpoint is unavailable` | **Zen 侧 exo-free 的后端故障**（402） | 不是你、不是代理、也不是额度。跑 `node tools/check-models.mjs` 确认，等它恢复 |
 | `ConnectionRefused` | 代理没在跑 | `node proxy.mjs`，或装了自启就重启一下 |
 | `Invalid API key` | key 失效，或被 Console 登录凭据抢占 | 见上面 `auth.override`；或重新 `opencode auth login` |
 | 平时正常，一撞 GPT 就报 403 | 会话 id 形状变了，重掷被门禁挡 | 跑 `node doctor.mjs`，按 [docs/FINDINGS.md](docs/FINDINGS.md) 重新摸 |
@@ -314,6 +332,7 @@ node test-relay.mjs
 ├── docs/
 │   └── FINDINGS.md            逆向发现记录 + 失效后怎么重新摸
 └── tools/                     研究与诊断脚本
+    ├── check-models.mjs       逐个测免费模型，区分账号问题与单模型故障
     ├── probe.mjs              直连路由探测
     ├── auth-test.mjs          判断某个 token 在 Zen 眼里是否有效
     ├── debug-zen.mjs          打印 Zen 的原始响应

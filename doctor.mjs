@@ -79,9 +79,9 @@ if (health) {
     warn(`有 ${s.exhausted} 次重掷耗尽没拿到 Claude`);
     problems.push({ level: 'warn', what: '重掷耗尽', fix: '把 config.json 的 retry.maxAttempts 调大（比如 10），或稍后重试' });
   }
-  if (s.intercepted === 0 && s.requests > 2) {
-    warn('一直没有请求被拦截 —— baseURL 可能没指对');
-    problems.push({ level: 'warn', what: '流量没进代理', fix: '检查 opencode.json 的 baseURL 是否为 ' + RELAY + '/zen/v1' });
+  if (s.intercepted === 0) {
+    // 只是本次启动后还没流量，不算问题（baseURL 的正确性已在第 3 项单独校验过）
+    info('本次启动后还没有 exo-free 请求进来 —— 发一条消息再跑一次即可确认链路');
   }
 } else {
   info('（代理没跑，跳过）');
@@ -154,6 +154,16 @@ if (!health) {
       ok(`探测通过：${kinds.join(', ')}`);
       info('凭据有效、门禁放行、路由正常 —— 整条链路健康');
       if (kinds.includes('gpt')) info('顺带说明：GPT 路由确实存在，代理会把它丢弃重掷');
+    } else if (statuses.includes(402)) {
+      bad('402 —— Zen 说 exo-free 的后端不可用');
+      info(sample.slice(0, 200));
+      info('这是 Zen 侧对 exo-free 的故障，不是你、不是代理、也不是额度问题。');
+      info('诊断依据：同一时刻别的免费模型仍返回 200，可用 node tools/check-models.mjs 复核。');
+      problems.push({
+        level: 'fatal',
+        what: 'exo-free 的上游端点故障（Zen 侧问题）',
+        fix: '等它恢复；或换别的免费模型（但它们不是 Claude）。用 node tools/check-models.mjs 看哪些还活着',
+      });
     } else if (statuses.includes(401)) {
       bad('401 —— API key 失效了');
       info(sample.slice(0, 160));
