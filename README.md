@@ -47,20 +47,34 @@ node setup.mjs
 # 3. 重启 OpenCode，选 exo-free 模型，随便发一句话
 ```
 
-装好了。向导会自动：
+### 向导到底检查什么
 
-- 检查 Node 版本和 OpenCode 是否就位
-- 引导你填 Zen API key
-- 生成 `config.json`
-- **联网验证**这个 key 是不是真的有效
-- 修改 `~/.config/opencode/opencode.json`，把 `opencode` 提供方指向本代理
-  （会先备份原文件，只动 `baseURL` 这一个键）
-- 问你要不要立刻启动
+`setup.mjs` 会按顺序做 **8 项检查**，任何一项不通过都会直接告诉你缺什么、怎么补，
+而不是让你装完才发现用不了：
 
-如果不想让它动 OpenCode 的配置：
+| # | 检查项 | 不通过时 |
+| --- | --- | --- |
+| 1 | Node.js ≥ 18 | 直接退出，给出下载地址 |
+| 2 | OpenCode 是否就位 | 警告，问你是否继续 |
+| 3 | 能否连上 `opencode.ai` | 直接退出（后面没法查） |
+| 4 | **`exo-free` 是否还在售** | 警告 —— 它下架了这个项目就没意义了 |
+| 5 | 端口是否空闲（占用者是不是本代理自己） | 提示换端口 |
+| 6 | **Zen 凭据**：索要 + 联网验证真假 | 401 时警告并确认 |
+| 7 | 写 `config.json` + 改 OpenCode 配置 | 备份失败则**拒绝覆盖**并打印手动步骤 |
+| 8 | **启动 + 端到端验证** | 等你真发一条消息，确认它确实落到了 Claude |
+
+第 8 步是重点：向导会启动代理，然后**等你打开 OpenCode 发一条消息**，
+实时盯着代理计数，确认请求真的进来了、以及判定结果是 Claude 还是 GPT。
+这是唯一能证明"装完确实能用"的方法。
+
+### 常用参数
 
 ```bash
-node setup.mjs --no-opencode    # 只打印该写什么，你自己改
+node setup.mjs --no-opencode    # 不碰 OpenCode 配置，只打印该写什么
+node setup.mjs --skip-verify    # 跳过第 8 步的端到端验证
+node setup.mjs --key oc_sk_...  # 直接给 key，不交互
+node setup.mjs --port 8789      # 换端口
+node setup.mjs --yes            # 全默认，不问（脚本/CI 用）
 ```
 
 ---
@@ -115,6 +129,33 @@ powershell -ExecutionPolicy Bypass -File uninstall-autostart.ps1
 然后 `launchctl load ~/Library/LaunchAgents/ai.relay.zen.plist`。
 
 **Linux**：systemd user service 或 crontab `@reboot`，同理。
+
+### 管理台
+
+装完之后日常用一个交互式菜单就够了：
+
+```bash
+node relay.mjs
+```
+
+```
+  ┌──────────────────────────────────────────────┐
+  │  zen-claude-relay  管理台                    │
+  └──────────────────────────────────────────────┘
+  状态: ● 运行中  127.0.0.1:8788
+
+    1) 查看状态
+    2) 启动代理
+    3) 停止代理
+    4) 重启代理
+    5) 体检（doctor）
+    6) 路由探测
+    7) 查看日志
+    8) 开机自启（安装/卸载）
+    9) 修改配置（端口/凭据）
+   10) 自测（不需要 key）
+    0) 退出
+```
 
 ### 体检
 
@@ -262,6 +303,7 @@ node test-relay.mjs
 .
 ├── proxy.mjs                  代理本体（核心，零依赖）
 ├── setup.mjs                  冷启动向导
+├── relay.mjs                  交互式管理台（启停/体检/探测/日志/自启）
 ├── doctor.mjs                 一键体检
 ├── config.example.json        配置模板
 ├── start-relay.cmd / .sh      一键启动

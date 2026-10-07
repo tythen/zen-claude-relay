@@ -22,7 +22,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { pipeline } from 'node:stream';
@@ -355,6 +355,16 @@ function probeOnce({ headers, body, affinity, auth }) {
 }
 
 const TEMPLATE_FILE = path.join(__dirname, 'probe-template.json');
+const PID_FILE = path.join(__dirname, 'relay.pid');
+
+/** 退出时清掉 pid 文件（只在确实是自己写的那份时才删） */
+function cleanupPidFile() {
+  try {
+    if (existsSync(PID_FILE) && readFileSync(PID_FILE, 'utf8').trim() === String(process.pid)) unlinkSync(PID_FILE);
+  } catch {
+    /* 无所谓 */
+  }
+}
 
 /** 把模板落盘，让探测能力能跨代理重启保留。注意：落盘时剥掉 authorization。 */
 function saveTemplate() {
@@ -731,7 +741,10 @@ server.on('error', (e) => {
 const restoredAt = loadTemplate();
 if (restoredAt) log(`[relay] 已恢复上次的探测模板（保存于 ${restoredAt}）`);
 
+process.on('exit', cleanupPidFile);
+
 server.listen(CFG.listen.port, CFG.listen.host, () => {
+  try { writeFileSync(PID_FILE, String(process.pid)); } catch { /* 无所谓 */ }
   say('');
   say('  zen-claude-relay  —  让 opencode/exo-free 只走 Claude');
   say('  ─────────────────────────────────────────────────────');
@@ -752,6 +765,7 @@ server.listen(CFG.listen.port, CFG.listen.host, () => {
 process.on('SIGINT', () => {
   say('\n[relay] 关闭中…');
   log('[relay] SIGINT, shutting down');
+  cleanupPidFile();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000);
 });

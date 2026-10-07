@@ -13,6 +13,7 @@
   "scripts": {
     "setup": "node setup.mjs",
     "start": "node proxy.mjs",
+    "menu": "node relay.mjs",
     "doctor": "node doctor.mjs",
     "test": "node test-relay.mjs"
   },
@@ -27,10 +28,13 @@
   ],
   "files": [
     "proxy.mjs",
-    "doctor.mjs",
     "setup.mjs",
+    "relay.mjs",
+    "doctor.mjs",
     "config.example.json",
     "README.md",
+    "docs/",
+    "tools/",
     "LICENSE"
   ],
   "dependencies": {},

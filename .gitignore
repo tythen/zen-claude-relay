@@ -8,6 +8,7 @@ zen-key.txt
 relay.log
 relay.log.*
 probe-template.json
+relay.pid
 *.log
 
 # ── 依赖 ───────────────────────────────────────
