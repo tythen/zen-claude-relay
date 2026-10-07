@@ -1,0 +1,40 @@
+{
+  "$comment": "把这个文件复制成 config.json 再改。config.json 已被 .gitignore 排除，不会进版本库。",
+
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 8788
+  },
+
+  "upstream": "https://opencode.ai",
+
+  "intercept": {
+    "models": ["exo-free"],
+    "pathSuffix": "/chat/completions"
+  },
+
+  "retry": {
+    "maxAttempts": 6,
+    "peekTimeoutMs": 30000,
+    "maxPeekBytes": 262144,
+    "regenerateHeaders": ["x-session-affinity", "x-opencode-session", "x-opencode-request"],
+    "extraHeaders": {}
+  },
+
+  "auth": {
+    "$comment": "留空则沿用 OpenCode 自己的凭据。填了就用它覆盖被拦截请求的 Authorization。也可回退到 RELAY_ZEN_KEY 环境变量或 zen-key.txt。",
+    "override": "",
+    "applyTo": "intercepted"
+  },
+
+  "classify": {
+    "claudePrefixes": ["msg_"],
+    "gptPrefixes": ["resp_", "chatcmpl-"],
+    "unknownPolicy": "forward"
+  },
+
+  "logging": {
+    "file": "relay.log",
+    "verbose": false
+  }
+}

@@ -1,0 +1,28 @@
+# ── 机密：绝对不要提交 ────────────────────────────
+config.json
+zen-key.txt
+*.bak
+*.bak-*
+
+# ── 运行产物 ────────────────────────────────────
+relay.log
+relay.log.*
+*.log
+
+# ── 依赖 ───────────────────────────────────────
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# ── 编辑器 / 系统 ───────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── 本地实验用 ─────────────────────────────────
+.oc-state/
+tmp/
+scratch/

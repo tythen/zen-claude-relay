@@ -1,0 +1,38 @@
+{
+  "name": "zen-claude-relay",
+  "version": "1.0.0",
+  "description": "本地中转代理：让 OpenCode 的 exo-free 免费模型只落在 Claude 后端，而不是被随机分到 GPT",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "zen-claude-relay": "./proxy.mjs"
+  },
+  "scripts": {
+    "setup": "node setup.mjs",
+    "start": "node proxy.mjs",
+    "doctor": "node doctor.mjs",
+    "test": "node test-relay.mjs"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-zen",
+    "exo-free",
+    "claude",
+    "proxy",
+    "relay",
+    "llm"
+  ],
+  "files": [
+    "proxy.mjs",
+    "doctor.mjs",
+    "setup.mjs",
+    "config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {},
+  "devDependencies": {}
+}
