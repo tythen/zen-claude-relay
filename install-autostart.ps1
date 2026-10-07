@@ -39,6 +39,22 @@ if (-not $node) {
 Ok "node: $node"
 Ok "目录: $Dir"
 
+# 已经有实例在跑吗？有的话不要再拉一个，否则新实例会因端口被占而反复重启
+$Port = 8788
+if (Test-Path (Join-Path $Dir 'config.json')) {
+    try { $Port = (Get-Content (Join-Path $Dir 'config.json') -Raw | ConvertFrom-Json).listen.port } catch { }
+}
+$alreadyRunning = $false
+try {
+    $r = Invoke-WebRequest "http://127.0.0.1:$Port/__relay/health" -UseBasicParsing -TimeoutSec 3
+    if ($r.StatusCode -eq 200) { $alreadyRunning = $true }
+} catch { }
+
+if ($alreadyRunning) {
+    Warn "端口 $Port 上已经有一个代理在运行"
+    Info "计划任务只会在你下次登录时接管，这次不会重复启动它。"
+}
+
 # 已存在就先删掉，保证幂等
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existing) {
@@ -85,9 +101,13 @@ try {
 }
 
 # 立即试跑一次，确认能起来
-Info "正在试跑一次…"
-Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 4
+if ($alreadyRunning) {
+    Info "跳过试跑（已在运行中）"
+} else {
+    Info "正在试跑一次…"
+    Start-ScheduledTask -TaskName $TaskName
+    Start-Sleep -Seconds 4
+}
 
 $ok = $false
 for ($i = 0; $i -lt 10; $i++) {

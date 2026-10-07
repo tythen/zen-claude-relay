@@ -107,6 +107,12 @@ const UPSTREAM = new URL(CFG.upstream);
 const UPSTREAM_MODULE = UPSTREAM.protocol === 'https:' ? https : http;
 const VERBOSE = !!CFG.logging.verbose;
 
+// 极简着色，只用于致命错误提示
+const C = {
+  r: (s) => `\x1b[31m${s}\x1b[0m`,
+  y: (s) => `\x1b[33m${s}\x1b[0m`,
+};
+
 // ─────────────────────────────────────────────────────────────── 鉴权覆盖
 
 function maskKey(k) {
@@ -668,6 +674,27 @@ const server = http.createServer(async (req, res) => {
 
 server.on('clientError', (err, socket) => {
   if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+});
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    say('');
+    say(`  ${C.r(`✗ 端口 ${CFG.listen.port} 已被占用`)}`);
+    say('');
+    say('  多半是已经有一个代理在跑了。先确认一下：');
+    say(`    curl http://127.0.0.1:${CFG.listen.port}/__relay/health`);
+    say('');
+    say('  如果确实要再开一个，换个端口即可：');
+    say(`    node proxy.mjs --port ${CFG.listen.port + 1}`);
+    say('  （同时记得把 OpenCode 配置里的 baseURL 端口一起改掉）');
+    say('');
+    process.exit(1);
+  }
+  if (e.code === 'EACCES') {
+    say(`\n  ${C.r(`✗ 没有权限监听端口 ${CFG.listen.port}`)}\n`);
+    process.exit(1);
+  }
+  throw e;
 });
 
 server.listen(CFG.listen.port, CFG.listen.host, () => {
