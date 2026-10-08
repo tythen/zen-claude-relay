@@ -48,6 +48,11 @@ const DEFAULTS = {
     regenerateHeaders: ['x-session-affinity', 'x-opencode-session', 'x-opencode-request'],
     // 额外附加/覆盖的请求头（留空即不附加）
     extraHeaders: {},
+    // 上游返回这些状态码时也当作「可重试」——端点抖动/临时故障。
+    // Zen 上 402/503 常表示 "Endpoint is unavailable"，属临时故障而非真的欠费，
+    // 实测同一错误会以 402/429/503 交替出现，所以按状态码重试是有意义的。
+    retryableStatuses: [402, 500, 502, 503, 504],
+    retryStatusDelayMs: 400,
   },
   classify: {
     claudePrefixes: ['msg_'],
@@ -175,6 +180,8 @@ const stats = {
 // ─────────────────────────────────────────────────────────────── 小工具
 
 // 必须剥掉的 hop-by-hop 头；transfer-encoding 交给 Node 重新分帧
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -513,13 +520,26 @@ async function handleIntercepted(req, res, bodyBuf, t0) {
       continue;
     }
 
-    // 非 200：不是路由问题，直接把上游的答复还给客户端
+    // 非 200：先看是不是「端点抖动」这类可重试的
     if (up.status !== 200) {
       const chunks = [];
       for await (const c of up.stream) chunks.push(c);
       const buf = Buffer.concat(chunks);
+
+      const retryable = (CFG.retry.retryableStatuses ?? []).includes(up.status);
+      if (retryable && attempt < max) {
+        stats.upstreamErrors++;
+        const wait = (CFG.retry.retryStatusDelayMs ?? 400) * attempt;
+        log(
+          `[exo ${stag}] attempt ${attempt}: 上游 HTTP ${up.status}（端点抖动？）` +
+            `${wait}ms 后重发 — ${buf.toString('utf8').slice(0, 120)}`,
+        );
+        await sleep(wait);
+        continue;
+      }
+
       stats.relayed++;
-      log(`[exo] attempt ${attempt}: 上游 HTTP ${up.status}，原样转发`);
+      log(`[exo ${stag}] attempt ${attempt}: 上游 HTTP ${up.status}，原样转发`);
       res.writeHead(up.status, relayHeaders(up.headers));
       res.end(buf);
       return;

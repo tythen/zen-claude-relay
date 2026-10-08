@@ -61,6 +61,14 @@ const mock = http.createServer((req, res) => {
   req.on('end', () => {
     if (req.url.startsWith('/zen/v1/chat/completions') && (() => { try { return JSON.parse(body).model === 'exo-free'; } catch { return false; } })()) {
       const kind = seq.length ? seq.shift() : 'claude';
+
+      // seq 里若是数字，表示这次直接返回该 HTTP 状态码（用来测「端点抖动重试」）
+      if (typeof kind === 'number') {
+        seen.push({ kind: `status${kind}`, affinity: req.headers['x-session-affinity'] ?? null });
+        res.writeHead(kind, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: { type: 'server_error', message: 'Upstream request failed: Endpoint is unavailable.' } }));
+        return;
+      }
       seen.push({
         kind,
         affinity: req.headers['x-session-affinity'] ?? null,
@@ -231,6 +239,31 @@ seen = [];
   const r = await callProxy({ model: 'exo-free', stream: false, messages: [] });
   check('HTTP 200', r.status === 200, `got ${r.status}`);
   check('重掷了一次', seen.length === 2, `got ${seen.length}`);
+}
+console.log('');
+
+// ── 用例 6：上游端点抖动（402/503）应当自动重试
+console.log('用例 6 — 上游先返回 503、402，再正常：应当自动重试而非直接报错');
+seq = [503, 402, 'claude'];
+seen = [];
+{
+  const r = await callProxy({ model: 'exo-free', stream: true, messages: [] });
+  check('HTTP 200（没有被 503/402 直接打回）', r.status === 200, `got ${r.status}`);
+  check('最终拿到 Claude 内容', r.text.includes('HELLO_FROM_CLAUDE_BACKEND'));
+  check('上游共被调用 3 次（重试了 2 次）', seen.length === 3, `got ${seen.length}`);
+  check('第 1 次确实是 503', seen[0].kind === 'status503', seen[0].kind);
+  check('第 2 次确实是 402', seen[1].kind === 'status402', seen[1].kind);
+}
+
+// ── 用例 7：不可重试的状态码应当立刻回给客户端
+console.log('');
+console.log('用例 7 — 401（不可重试）应当立刻透传，不做无谓重试');
+seq = [401, 'claude'];
+seen = [];
+{
+  const r = await callProxy({ model: 'exo-free', stream: true, messages: [] });
+  check('HTTP 401 原样返回', r.status === 401, `got ${r.status}`);
+  check('上游只被调用 1 次（没有重试）', seen.length === 1, `got ${seen.length}`);
 }
 console.log('');
 

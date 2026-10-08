@@ -154,6 +154,17 @@ if (!health) {
       ok(`探测通过：${kinds.join(', ')}`);
       info('凭据有效、门禁放行、路由正常 —— 整条链路健康');
       if (kinds.includes('gpt')) info('顺带说明：GPT 路由确实存在，代理会把它丢弃重掷');
+    } else if (/Endpoint is unavailable|Model is unavailable/i.test(sample)) {
+      bad(`上游端点故障（HTTP ${statuses.join('/')}）`);
+      info(sample.slice(0, 200));
+      info('这是 Zen 侧对该模型的故障，不是你、不是代理、也不是额度问题。');
+      info('实测同一故障会以 402 / 429 / 503 交替出现，所以按错误消息判断更可靠。');
+      info('诊断依据：同一时刻别的免费模型仍返回 200 —— 用 node tools/check-models.mjs 复核。');
+      problems.push({
+        level: 'fatal',
+        what: 'Zen 侧模型端点故障（抖动中）',
+        fix: '代理会自动重试这类状态码；持续失败就等它恢复，或用 node tools/check-models.mjs 换个还活着的模型',
+      });
     } else if (statuses.includes(402)) {
       bad('402 —— Zen 说 exo-free 的后端不可用');
       info(sample.slice(0, 200));
